@@ -1,0 +1,80 @@
+== commands ==
+
+/usr/bin/brook
+  Python; standalone; {client reader, client sender} x {exec mode, stdio mode}
+  sender: Fluentd tag (or prefix) hardcoded
+  stdio:
+    reader/sender mode detected from provided addresses (exactly one)
+  exec:
+    reader/sender mode detected from provided addresses (one or other or both)
+    reader mode: program's STDIN from brook, STDOUT to console
+    sender mode: program's STDIN from console, STDOUT to brook
+
+  $ brook --reader { --read-address=<host>:<port> | $BROOK_READ_ADDRESS }
+  $ brook --sender { --send-address=<host>:<port> | $BROOK_SEND_ADDRESS }
+  $ brook --exec recs-grep '...'
+  $ brook --reader --exec send-to-collectd /var/run/collectd.sock
+  $ brook --sender --exec custom-listen-and-receive-script
+
+
+/usr/sbin/brookengine
+  Python; wrapper for running Fluentd and control socket client for SSMM/DS
+  $ brookengine --daemon --config=... --pidfile=...
+  $ brookengine list-queries
+  $ brookengine reload-queries
+  $ brookengine (start|stop|restart)-query
+
+
+== files ==
+
+/etc/brookengine/brookengine.conf
+  # Fluentd config
+  <source>
+    type forward
+    port 5168
+    bind 127.0.0.1
+  </source>
+  <match seismometer.input.**>
+    # plugin starts daemonshepherd and sets up PUB/SUB listening socket
+    type brook_queries
+    port 5268
+    bind 127.0.0.1
+
+    # daemonshepherd's parameters
+    control_socket /var/run/brook/daemons.sock
+    queries /etc/brookengine/queries.yaml
+    logging /etc/brookengine/queries.logging
+    brook_send_address 127.0.0.1:5168 # plugin can't detect; must be provided
+    #brook_read_address $bind:$port
+  </match>
+
+
+/etc/brookengine/queries.yaml
+  # daemonshepherd config
+  defaults:
+    stdout: log
+  daemons:
+    # feed metrics to FFT model checker/builder, get discrepancy from model out
+    # (data filter)
+    fft-model-checker:
+      start_command: >-
+        /usr/bin/brook --exec --sender --reader
+        /usr/bin/ssmm-fft-model-checker
+    # feed collectd with metrics (data sink)
+    store-collectd:
+      start_command: >-
+        /usr/bin/brook --exec --reader
+        /usr/bin/store-collectd /var/run/collectd.sock
+    #store-collectd-alt:
+    #  start_command: >-
+    #    /usr/bin/brook --reader
+    #    | /usr/bin/store-collectd /var/run/collectd.sock
+
+
+/etc/brookengine/queries.logging
+  # Python logging YAML config
+  version: 1
+  root:
+    level: INFO
+    handlers: [syslog]
+  # ...
