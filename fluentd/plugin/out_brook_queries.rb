@@ -6,6 +6,11 @@
 # fluent.conf
 # -----------
 #
+# <source>
+#   type forward
+#   port 5168
+#   bind 127.0.0.1
+# </source>
 # <match **>
 #   type brook_queries
 #
