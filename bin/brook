@@ -14,10 +14,22 @@ import subprocess
 #-----------------------------------------------------------------------------
 # command line options {{{
 
+#-----------------------------------------------------------
+# option callbacks {{{
+
+def set_read_channels(option, opt_str, value, parser):
+    parser.values.sub_chan = [
+        c.strip()
+        for c in value.split(",")
+    ]
+
+# }}}
+#-----------------------------------------------------------
+
 parser = optparse.OptionParser(
-    usage = "\n  <...> | %prog --sender [--send-address=<addr>]"
-            "\n  %prog --reader [--read-address=<addr>] | <...>"
-            "\n  %prog --exec [--reader] [--sender] [options] -- <command> <args> ..."
+    usage = "\n  <...> | %prog --send=<channel> [--send-address=<addr>]"
+            "\n  %prog --read=<channels> [--read-address=<addr>] | <...>"
+            "\n  %prog --exec [--read=...] [--send=...] [options] -- <command> <args> ..."
 )
 
 parser.add_option(
@@ -26,24 +38,25 @@ parser.add_option(
     #help = "",
 )
 parser.add_option(
-    "--sender", dest = "sender",
-    action = "store_true", default = False,
+    "--send", dest = "pub_chan",
     #help = "",
+    metavar = "CHANNEL"
 )
 parser.add_option(
-    "--reader", dest = "reader",
-    action = "store_true", default = False,
+    "--read", dest = "sub_chan", nargs = 1, type = "string",
+    action = "callback", callback = set_read_channels,
     #help = "",
+    metavar = "CHANNELS"
 )
 parser.add_option(
     "--send-address", dest = "send_address",
-    default = os.environ.get("BROOK_SEND_ADDRESS"), # may still be `None'
+    default = os.environ.get("BROOK_SEND_ADDRESS", "127.0.0.1:5168"),
     #help = "(default: 127.0.0.1:5168)",
     metavar = "HOST:PORT",
 )
 parser.add_option(
     "--read-address", dest = "read_address",
-    default = os.environ.get("BROOK_READ_ADDRESS"), # may still be `None'
+    default = os.environ.get("BROOK_READ_ADDRESS", "127.0.0.1:5268"),
     #help = "(default: 127.0.0.1:5268)",
     metavar = "HOST:PORT",
 )
@@ -53,21 +66,12 @@ parser.add_option(
 if options.mode == "exec" and len(args) == 0:
     parser.error("no command to execute provided")
 
-if options.mode == "stdio" and options.sender and options.reader:
+if options.mode == "stdio" and \
+   options.pub_chan is not None and options.sub_chan is not None:
     parser.error("reader and sender are mutually exclusive in STDIO mode")
 
-if options.mode == "exec" and not options.sender and not options.reader:
-    # detect mode(s) based on which addresses are provided
-    options.sender = (options.send_address is not None)
-    options.reader = (options.read_address is not None)
-
-if not options.sender and not options.reader:
+if options.pub_chan is None and options.sub_chan is None:
     parser.error("no operation mode (reader/sender) selected")
-
-if options.sender and options.send_address is None:
-    options.send_address = "127.0.0.1:5168"
-if options.reader and options.read_address is None:
-    options.read_address = "127.0.0.1:5268"
 
 # }}}
 #-----------------------------------------------------------------------------
@@ -85,10 +89,11 @@ class EmptyHandle:
 # SenderSocket {{{
 
 class SenderSocket:
-    def __init__(self, host, port):
+    def __init__(self, host, port, channel):
         self.host = host
         self.port = port
-        self.tag = "ssmm.input"
+        self.channel = channel
+        self.tag = "ssmm.%s" % (channel,)
         self.conn = None
         conn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         conn.settimeout(5)
@@ -272,20 +277,21 @@ readfh = EmptyHandle()
 
 child_process = None
 
-if options.sender:
+if options.pub_chan is not None:
     host, port = options.send_address.split(":")
-    sender = SenderSocket(host, int(port))
+    sender = SenderSocket(host, int(port), options.pub_chan)
 
-if options.reader:
+if options.sub_chan is not None:
     host, port = options.read_address.split(":")
     reader = ReaderSocket(host, int(port))
-    reader.subscribe()
+    for chan in options.sub_chan:
+        reader.subscribe(chan)
 
 if options.mode == "stdio":
-    if options.sender:
+    if options.pub_chan is not None:
         readfh = ReadHandle(sys.stdin)
         sys.stdout.close()
-    else: # options.sender
+    else: # options.sub_chan is not None
         writefh = WriteHandle(sys.stdout)
         sys.stdin.close()
 else:
@@ -294,8 +300,8 @@ else:
         args,
         shell = False,
         close_fds = True,
-        stdin  = subprocess.PIPE if options.reader else devnull,
-        stdout = subprocess.PIPE if options.sender else devnull,
+        stdin  = subprocess.PIPE if options.sub_chan is not None else devnull,
+        stdout = subprocess.PIPE if options.pub_chan is not None else devnull,
     )
     devnull.close()
     if child_process.stdout is not None:

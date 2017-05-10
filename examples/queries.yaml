@@ -6,6 +6,6 @@ daemons: {}
 #daemons:
 #  collectd:
 #    start_command: >-
-#      brook --get
+#      brook --read=metrics
 #      | transform-to-collectd
 #      | socat - unix:/var/run/collectd-unixsock > /dev/null

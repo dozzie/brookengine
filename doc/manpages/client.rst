@@ -7,9 +7,9 @@ Synopsis
 
 .. code-block:: none
 
-    <data-generator> | brook --sender [--send-address=<addr>]
-    brook --reader [--read-address=<addr>] | <data-reader>
-    brook --exec [--reader] [--sender] [options] -- <command> <args> ...
+    <data-generator> | brook --send=<channel> [--send-address=<addr>]
+    brook --read=<channels> [--read-address=<addr>] | <data-reader>
+    brook --exec [--read=...] [--send=...] [options] -- <command> <args> ...
 
 Description
 ===========
@@ -30,9 +30,9 @@ Options
 
 .. option:: --exec
 
-.. option:: --sender
+.. option:: --send <channel>
 
-.. option:: --reader
+.. option:: --read <channels>
 
 .. option:: --send-address <host>:<port>
 
