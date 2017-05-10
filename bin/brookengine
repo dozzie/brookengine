@@ -31,6 +31,28 @@ parser.add_option(
     help = "path to plugins", metavar = "PATH",
 )
 parser.add_option(
+    "--background", dest = "background",
+    action = "store_true", default = False,
+    help = "detach from terminal and run in background",
+)
+parser.add_option(
+    "--user", dest = "user",
+    help = "user to run as", metavar = "USER",
+)
+parser.add_option(
+    "--group", dest = "group",
+    help = "group to run as", metavar = "GROUP",
+)
+parser.add_option(
+    "--logfile", dest = "logfile",
+    help = "path to data bus log file", metavar = "PATH",
+)
+parser.add_option(
+    "--pidfile", dest = "pidfile",
+    default = "/var/run/brookengine.pid",
+    help = "path to PID file", metavar = "PATH",
+)
+parser.add_option(
     "--socket", dest = "socket",
     default = "/var/run/brookengine/queries",
     help = "path to control socket", metavar = "PATH",
@@ -61,15 +83,20 @@ if len(args) > 0:
 
 if command is None:
     os.environ["GEM_PATH"] = "/usr/lib/brookengine/fluentd"
-    os.execv("/usr/sbin/fluentd", [
+    exec_args = [
         "brook-databus",
         "--config", options.config,
         "--plugin", options.plugins,
-        #"--daemon", options.pidfile,
-        #"--user", options.user,
-        #"--group", options.group,
-        #"--log", options.log_file,
-    ])
+    ]
+    if options.user is not None:
+        exec_args.extend(["--user", options.user])
+    if options.group is not None:
+        exec_args.extend(["--group", options.group])
+    if options.background:
+        exec_args.extend(["--daemon", options.pidfile])
+    if options.logfile is not None:
+        exec_args.extend(["--log", options.logfile])
+    os.execv("/usr/sbin/fluentd", exec_args)
 
 # }}}
 #-----------------------------------------------------------------------------

@@ -58,11 +58,21 @@ Options
 
 .. program:: brookengine
 
-.. option:: --socket <path>
-
 .. option:: --config <path>
 
 .. option:: --plugins <path>
+
+.. option:: --background
+
+.. option:: --user <user>
+
+.. option:: --group <group>
+
+.. option:: --logfile <path>
+
+.. option:: --pidfile <path>
+
+.. option:: --socket <path>
 
 .. _brookengine-config:
 
