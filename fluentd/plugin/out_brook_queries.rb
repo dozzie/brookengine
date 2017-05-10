@@ -176,7 +176,7 @@ class BrookEngineQueries < Fluent::Output
             ["/usr/bin/daemonshepherd", "brook-queries"],
             "--daemons", @queries_path,
             "--logging", @logging_path,
-            "--control-socket", @socket_path,
+            "--socket", @socket_path,
           )
           # TODO: check if fork failed
           $log.info "starting queries supervisor process", :pid => @pid
