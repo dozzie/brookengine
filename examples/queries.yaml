@@ -1,0 +1,11 @@
+defaults:
+  stdout: log
+
+daemons: {}
+
+#daemons:
+#  collectd:
+#    start_command: >-
+#      brook --get
+#      | transform-to-collectd
+#      | socat - unix:/var/run/collectd-unixsock > /dev/null

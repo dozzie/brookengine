@@ -1,0 +1,136 @@
+#!/usr/bin/python
+
+import optparse
+import os
+import sys
+import socket
+import json
+
+from seismometer.daemonshepherd.control_socket import ControlSocketClient
+from seismometer.daemonshepherd.filehandle import EOF
+
+#-----------------------------------------------------------------------------
+# command line options {{{
+
+parser = optparse.OptionParser(
+    usage = "\n  %prog [options]"
+            "\n  %prog [--socket=PATH] reload"
+            "\n  %prog [--socket=PATH] list"
+            "\n  %prog [--socket=PATH] {start|stop|restart|cancel-restart} <query>",
+    #description = "",
+)
+
+parser.add_option(
+    "--config", dest = "config",
+    default = "/etc/brookengine/brookengine.conf",
+    help = "configuration file", metavar = "FILE",
+)
+parser.add_option(
+    "--plugins", dest = "plugins",
+    default = "/etc/brookengine/plugin",
+    help = "path to plugins", metavar = "PATH",
+)
+parser.add_option(
+    "--socket", dest = "socket",
+    default = "/var/run/brookengine/queries",
+    help = "path to control socket", metavar = "PATH",
+)
+
+(options, args) = parser.parse_args()
+
+command = None
+COMMANDS = {
+    "reload":         { "args": 0, "cmd": "reload",         "output": None },
+    "list":           { "args": 0, "cmd": "ps",             "output": "line-json" },
+    "start":          { "args": 1, "cmd": "start",          "output": None },
+    "stop":           { "args": 1, "cmd": "stop",           "output": "command" },
+    "restart":        { "args": 1, "cmd": "restart",        "output": "command" },
+    "cancel-restart": { "args": 1, "cmd": "cancel_restart", "output": None },
+}
+
+if len(args) > 0:
+    command = args.pop(0)
+    if command not in COMMANDS:
+        parser.error("unrecognized command: %s" % (command,))
+    if len(args) != COMMANDS[command]["args"]:
+        parser.error("wrong number of arguments for command %s" % (command,))
+
+# }}}
+#-----------------------------------------------------------------------------
+# execute Fluentd {{{
+
+if command is None:
+    os.execv("/usr/sbin/fluentd", [
+        "brook-databus",
+        "--config", options.config,
+        "--plugin", options.plugins,
+        #"--daemon", options.pidfile,
+        #"--user", options.user,
+        #"--group", options.group,
+        #"--log", options.log_file,
+    ])
+
+# }}}
+#-----------------------------------------------------------------------------
+# administrative commands {{{
+
+# code copied directly from daemonshepherd
+
+conn = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+try:
+    conn.connect(options.socket)
+except socket.error, e:
+    print >>sys.stderr, e
+    sys.exit(1)
+
+supervisor = ControlSocketClient(conn)
+
+if COMMANDS[command]["args"] == 0:
+    supervisor.send({"command": COMMANDS[command]["cmd"]})
+elif COMMANDS[command]["args"] == 1:
+    supervisor.send({
+        "command": COMMANDS[command]["cmd"],
+        "daemon": args[0],
+    })
+
+reply = supervisor.read(blocking = True)
+supervisor.close()
+
+if reply is EOF:
+    print >>sys.stderr, \
+          "Empty reply from daemonshepherd, probably a server bug."
+    sys.exit(1)
+
+if reply.get("status") == "error" and "message" in reply:
+    print >>sys.stderr, "error: %s" % (reply["message"],)
+    sys.exit(1)
+if reply.get("status") != "ok": # unrecognized errors
+    print >>sys.stderr, json.dumps(reply)
+    sys.exit(1)
+
+# data transformation for `brookengine list' command
+if command == "list":
+    for rec in reply["result"]:
+        rec["query"] = rec.pop("daemon")
+
+if COMMANDS[command]["output"] == "line-json":
+    for rec in reply["result"]:
+        print json.dumps(rec)
+elif COMMANDS[command]["output"] == "line":
+    for rec in reply["result"]:
+        print rec
+elif COMMANDS[command]["output"] == "command":
+    if "result" in reply:
+        result = reply["result"]
+        if result["output"] is not None and result["output"] != "":
+            print result["output"]
+        if "signal" in result:
+            print "## command died on signal %d" % (result["signal"],)
+            sys.exit(255)
+        else:
+            print "## command exited with code %d" % (result["exit"],)
+            sys.exit(result["exit"])
+
+# }}}
+#-----------------------------------------------------------------------------
+# vim:ft=python:foldmethod=marker
