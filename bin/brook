@@ -139,6 +139,16 @@ class ReaderSocket:
     def __del__(self):
         self.close()
 
+    def subscribe(self, channel = None):
+        if channel is None:
+            channel = "*"
+        self.conn.send("+%s\n" % (channel,))
+
+    def unsubscribe(self, channel = None):
+        if channel is None:
+            channel = "*"
+        self.conn.send("-%s\n" % (channel,))
+
     def read(self):
         line = self.fh.readline()
         if line == "":
@@ -269,6 +279,7 @@ if options.sender:
 if options.reader:
     host, port = options.read_address.split(":")
     reader = ReaderSocket(host, int(port))
+    reader.subscribe()
 
 if options.mode == "stdio":
     if options.sender:

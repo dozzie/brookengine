@@ -81,9 +81,9 @@ class BrookEngineQueries < Fluent::Output
   def emit(tag, es, chain)
     es.each {|time, record|
       message = record.to_json + "\n"
-      @subscribers.each_key {|sock|
+      @subscribers.each {|sock,channels|
         begin
-          sock.write(message)
+          sock.write(message) if channels.has_key? "*" or channels.has_key? tag
         rescue
           # broken connection will be closed without our intervention
         end
@@ -93,11 +93,19 @@ class BrookEngineQueries < Fluent::Output
   end
 
   def subscribe(sock)
-    @subscribers[sock] = true
+    @subscribers[sock] = {}
   end
 
   def unsubscribe(sock)
     @subscribers.delete(sock)
+  end
+
+  def subscribe_channel(sock, channel)
+    @subscribers[sock][channel] = true
+  end
+
+  def unsubscribe_channel(sock, channel)
+    @subscribers[sock].delete(channel)
   end
 
   def run
@@ -123,6 +131,7 @@ class BrookEngineQueries < Fluent::Output
       v = io.setsockopt(Socket::IPPROTO_TCP, Socket::TCP_KEEPIDLE, opt)
 
       @pubsub = pubsub
+      @sub_buffer = ""
     end
 
     def on_connect
@@ -130,8 +139,22 @@ class BrookEngineQueries < Fluent::Output
     end
 
     def on_read(data)
-      # no data expected on this socket, so anything that comes is an error
-      close
+      @sub_buffer << data
+      commands = @sub_buffer.split(/\n/)
+      if @sub_buffer[-1] == "\n"
+        @sub_buffer.clear()
+      else
+        @sub_buffer = commands.pop()
+      end
+      for cmd in commands
+        if cmd[0] == "+"
+          @pubsub.subscribe_channel(self, cmd[1..-1])
+        elsif cmd[0] == "-"
+          @pubsub.unsubscribe_channel(self, cmd[1..-1])
+        else
+          close
+        end
+      end
     end
 
     def on_close
