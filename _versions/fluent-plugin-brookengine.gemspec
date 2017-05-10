@@ -1,0 +1,1 @@
+../fluentd/fluent-plugin-brookengine.gemspec
