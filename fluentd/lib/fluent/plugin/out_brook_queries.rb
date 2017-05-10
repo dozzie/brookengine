@@ -38,6 +38,8 @@ class BrookEngineQueries < Fluent::Output
   config_param :bind, :string, :default => "127.0.0.1"
   config_param :backlog, :integer, :default => 1
 
+  config_param :strip_tag, :string, :default => nil
+
   config_param :control_socket, :string
   config_param :queries, :string
   config_param :logging, :string
@@ -79,11 +81,16 @@ class BrookEngineQueries < Fluent::Output
   end
 
   def emit(tag, es, chain)
+    if tag.start_with?(@strip_tag) and tag[@strip_tag.length] == "."
+      chan = tag[@strip_tag.length + 1 .. -1]
+    else
+      chan = tag
+    end
     es.each {|time, record|
       message = record.to_json + "\n"
       @subscribers.each {|sock,channels|
         begin
-          sock.write(message) if channels.has_key? "*" or channels.has_key? tag
+          sock.write(message) if channels.has_key? "*" or channels.has_key? chan
         rescue
           # broken connection will be closed without our intervention
         end
