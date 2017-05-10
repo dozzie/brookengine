@@ -93,12 +93,10 @@ class BrookEngineQueries < Fluent::Output
   end
 
   def subscribe(sock)
-    $log.info "subscribe"
     @subscribers[sock] = true
   end
 
   def unsubscribe(sock)
-    $log.info "unsubscribe"
     @subscribers.delete(sock)
   end
 
