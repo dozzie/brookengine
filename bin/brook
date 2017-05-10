@@ -90,6 +90,8 @@ class EmptyHandle:
 
 class SenderSocket:
     def __init__(self, host, port, channel):
+        if port is None:
+            port = 5168
         self.host = host
         self.port = port
         self.channel = channel
@@ -131,6 +133,8 @@ class SenderSocket:
 
 class ReaderSocket:
     def __init__(self, host, port):
+        if port is None:
+            port = 5268
         self.host = host
         self.port = port
         self.conn = None
@@ -268,6 +272,19 @@ def terminate_child(process):
 
 # }}}
 #-----------------------------------------------------------------------------
+# address() {{{
+
+def address(addr):
+    if ":" in addr:
+        host, port = addr.split(":")
+        port = int(port)
+    else:
+        host = addr
+        port = None
+    return (host, port)
+
+# }}}
+#-----------------------------------------------------------------------------
 # handles setup
 
 sender = None
@@ -278,12 +295,12 @@ readfh = EmptyHandle()
 child_process = None
 
 if options.pub_chan is not None:
-    host, port = options.send_address.split(":")
-    sender = SenderSocket(host, int(port), options.pub_chan)
+    host, port = address(options.send_address)
+    sender = SenderSocket(host, port, options.pub_chan)
 
 if options.sub_chan is not None:
-    host, port = options.read_address.split(":")
-    reader = ReaderSocket(host, int(port))
+    host, port = address(options.read_address)
+    reader = ReaderSocket(host, port)
     for chan in options.sub_chan:
         reader.subscribe(chan)
 
