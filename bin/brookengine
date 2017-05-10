@@ -60,6 +60,7 @@ if len(args) > 0:
 # execute Fluentd {{{
 
 if command is None:
+    os.environ["GEM_PATH"] = "/usr/lib/brookengine/fluentd"
     os.execv("/usr/sbin/fluentd", [
         "brook-databus",
         "--config", options.config,
